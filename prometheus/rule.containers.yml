@@ -1,0 +1,30 @@
+groups:
+    - name: containers
+      rules:
+          # TODO: Add here specific containers names
+          - alert: BackendDown
+            expr: absent(container_memory_usage_bytes{name="backend"})
+            for: 30s
+            labels:
+                severity: critical
+            annotations:
+                summary: "Backend down"
+                description: "Backend container is down for more than 30 seconds."
+
+          - alert: BackendHighCpu
+            expr: sum(rate(container_cpu_usage_seconds_total{name="backend"}[1m])) / count(node_cpu_seconds_total{mode="system"}) * 100 > 10
+            for: 30s
+            labels:
+                severity: warning
+            annotations:
+                summary: "Backend high CPU usage"
+                description: "Backend CPU usage is {{ humanize $value}}%."
+
+          - alert: BackendHighMemory
+            expr: sum(container_memory_usage_bytes{name="backend"}) > 1200000000
+            for: 30s
+            labels:
+                severity: warning
+            annotations:
+                summary: "Backend high memory usage"
+                description: "Backend memory consumption is at {{ humanize $value}}."

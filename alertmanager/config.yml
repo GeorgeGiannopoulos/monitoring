@@ -1,0 +1,39 @@
+global:
+    resolve_timeout: 1m
+    slack_api_url: "https://hooks.slack.com/services/add.hook.token.of.slack.chanel"
+
+route:
+    receiver: "slack-email-notifications"
+
+receivers:
+    - name: "slack-email-notifications"
+      # email_configs:
+      #     - smarthost: "<add-mail-server>"
+      #       hello: "<add-email-username>"
+      #       to: "<add-email-username>"
+      #       from: "<add-email-username>"
+      #       auth_username: "<add-email-username>"
+      #       auth_password: "<add-email-password>"
+      #       send_resolved: true
+      #       require_tls: false
+      slack_configs:
+          - channel: "#alerts-<env>"
+            color: '{{ template "slack.color" . }}'
+            title: '{{ template "slack.title" . }}'
+            text: '{{ template "slack.text" . }}'
+            send_resolved: true
+            actions:
+                - type: button
+                  text: "Runbook :green_book:"
+                  url: "{{ (index .Alerts 0).Annotations.runbook_url }}"
+                - type: button
+                  text: "Query :mag:"
+                  url: "{{ (index .Alerts 0).GeneratorURL }}"
+                - type: button
+                  text: "Dashboard :chart_with_upwards_trend:"
+                  url: "{{ (index .Alerts 0).Annotations.dashboard_url }}"
+                - type: button
+                  text: "Silence :no_bell:"
+                  url: '{{ template "__alert_silence_link" . }}'
+
+templates: ["/etc/alertmanager/templates/*.tmpl"]

@@ -1,0 +1,141 @@
+version: '3.8'
+name: monitoring
+# --------------------------------------------------------------------------------------------------
+# Services
+# --------------------------------------------------------------------------------------------------
+services:
+    # ----------------------------------------------------------------------------------------------
+    # Dashboard
+    # ----------------------------------------------------------------------------------------------
+    grafana:
+        image: grafana/grafana:10.4.2
+        container_name: monitoring-grafana
+        restart: unless-stopped
+        volumes:
+            - grafana-data:/var/lib/grafana                                # Where grafana data is stored
+            - ./grafana/dashboards:/etc/grafana/provisioning/dashboards    # Where grafana dashboards are stored
+            - ./grafana/datasources:/etc/grafana/provisioning/datasources  # Where grafana datasources are stored
+            - ./grafana/config.ini:/etc/grafana/grafana.ini                # Where grafana config is stored
+        ports:
+            - "127.0.0.1:3000:3000"  # Grafana dashboard
+        depends_on:
+            - prometheus
+            - loki
+    # ----------------------------------------------------------------------------------------------
+    # Data Collectors
+    # ----------------------------------------------------------------------------------------------
+    prometheus:
+        image: prom/prometheus:v2.51.2
+        container_name: monitoring-prometheus
+        restart: unless-stopped
+        volumes:
+            - prometheus-data:/prometheus   # Where prometheus data is stored
+            - ./prometheus:/etc/prometheus  # Where prometheus config is stored
+        ports:
+            - "127.0.0.1:9090:9090"  # Grafana dashboard
+        depends_on:
+            - nodeexporter
+            - cadvisor
+        command:
+            - '--config.file=/etc/prometheus/prometheus.yml'
+            - '--storage.tsdb.path=/prometheus'
+            - '--web.console.libraries=/etc/prometheus/console_libraries'
+            - '--web.console.templates=/etc/prometheus/consoles'
+            - '--storage.tsdb.retention.time=200h'
+            - '--web.enable-lifecycle'
+    loki:
+        image: grafana/loki:2.9.7
+        container_name: monitoring-loki
+        restart: unless-stopped
+        volumes:
+            - loki-data:/loki  # Where loki data is stored
+            - ./loki/loki-config.yaml:/mnt/config/loki-config.yaml
+        ports:
+            - "127.0.0.1:3100:3100"  # Loki dashboard
+        command:
+            - '--config.file=/mnt/config/loki-config.yaml'
+    # ----------------------------------------------------------------------------------------------
+    # Datasources
+    # ----------------------------------------------------------------------------------------------
+    nodeexporter:
+        image: quay.io/prometheus/node-exporter:v1.7.0
+        container_name: monitoring-nodeexporter
+        restart: unless-stopped
+        volumes:
+            - /proc:/host/proc:ro
+            - /sys:/host/sys:ro
+            - /:/rootfs:ro
+        command:
+            - '--path.procfs=/host/proc'
+            - '--path.rootfs=/rootfs'
+            - '--path.sysfs=/host/sys'
+            - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+        ports:
+            - "127.0.0.1:9100:9100"  # Node-Exporter dashboard
+    cadvisor:
+        image: gcr.io/cadvisor/cadvisor:latest
+        container_name: monitoring-cadvisor
+        restart: unless-stopped
+        volumes:
+            - /:/rootfs:ro
+            - /var/run:/var/run:ro
+            - /sys:/sys:ro
+            - /var/lib/docker/:/var/lib/docker:ro
+            - /dev/disk/:/dev/disk:ro
+            - /cgroup:/cgroup:ro  # NOTE: Doesn't work on MacOS only for Linux
+        ports:
+            - '127.0.0.1:8080:8080'  # cAdvisor dashboard
+        devices:
+            - /dev/kmsg:/dev/kmsg
+        privileged: true
+    promtail:
+        image: grafana/promtail:2.9.4
+        container_name: monitoring-promtail
+        restart: unless-stopped
+        volumes:
+            - ./promtail/promtail-config.yaml:/mnt/config/promtail-config.yaml  # Where promtail config is stored
+            - promtail-data:/tmp/promtail
+            - /var/log:/var/log:ro
+            - /var/run/docker.sock:/var/run/docker.sock:ro
+            - /var/lib/docker/containers:/var/lib/docker/containers:ro
+        command:
+            - '--config.file=/mnt/config/promtail-config.yaml'
+            - '--config.expand-env=true'
+        depends_on:
+            - loki
+    blackboxexporter:
+        image: quay.io/prometheus/blackbox-exporter:v0.25.0
+        container_name: monitoring-blackboxexporter
+        restart: unless-stopped
+        volumes:
+            - ./blackbox-exporter:/config  # Where blackboxexporter config is stored
+        ports:
+            - "127.0.0.1:9115:9115"  # blackbox exporter metrics
+        command:
+            - '--config.file=/config/blackbox.yml'
+    # ----------------------------------------------------------------------------------------------
+    # Alerts
+    # ----------------------------------------------------------------------------------------------
+    alertmanager:
+        image: prom/alertmanager:v0.27.0
+        container_name: monitoring-alertmanager
+        restart: unless-stopped
+        volumes:
+            - ./alertmanager:/etc/alertmanager
+            - alertmanager-data:/alertmanager
+        command:
+            - '--config.file=/etc/alertmanager/config.yml'
+            - '--storage.path=/alertmanager'
+        ports:
+            - "127.0.0.1:9093:9093"  # Alert-Manager dashboard
+        depends_on:
+            - prometheus
+# --------------------------------------------------------------------------------------------------
+# Volumes
+# --------------------------------------------------------------------------------------------------
+volumes:
+    grafana-data:
+    prometheus-data:
+    loki-data:
+    promtail-data:
+    alertmanager-data:

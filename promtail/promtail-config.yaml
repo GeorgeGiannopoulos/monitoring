@@ -1,0 +1,49 @@
+server:
+    http_listen_port: 9080
+    grpc_listen_port: 0
+
+positions:
+    filename: /tmp/promtail/positions.yaml
+
+clients:
+    - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+    # NOTE: Commented-in to descrease loki's data size. This job is not been used from a dashboard at
+    #       the moment
+    #- job_name: system
+    #  static_configs:
+    #      - targets:
+    #            - localhost
+    #        labels:
+    #            job: varlogs
+    #            __path__: /var/log/*log
+
+    - job_name: docker
+      static_configs:
+          - targets:
+                - localhost
+            labels:
+                job: docker_logs
+                __path__: /var/lib/docker/containers/*/*-json.log
+
+    - job_name: docker
+      # use docker.sock to filter containers
+      docker_sd_configs:
+          - host: "unix:///var/run/docker.sock"
+            refresh_interval: 15s
+      # use container name to create a loki label
+      relabel_configs:
+          - source_labels: ["__meta_docker_container_name"]
+            regex: "/(.*)"
+            target_label: "container"
+
+    - job_name: nginx
+      static_configs:
+      - targets:
+          - localhost
+        labels:
+            job: nginx
+            host: ${hostname}
+            agent: promtail
+            __path__: /var/log/nginx/*log
